@@ -2,3 +2,4 @@ MulensModel
 numpy
 matplotlib
 pandas
+ipympl

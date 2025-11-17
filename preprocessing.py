@@ -20,3 +20,5 @@ with open("microlensing_events.ipac", "a") as write_file:
 
 def remove_nan_rows(sample):
     sample.remove_rows(np.where([c.data for c in sample.mask.itercols()])[-1])
+
+
