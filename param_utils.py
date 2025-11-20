@@ -45,7 +45,7 @@ class Param:
         return str(f"{self.name}: " + "{:.2f}".format(x))
     
     def get_label_n(self, x):
-        return [self.get_label(x)]
+        return [self.get_label(x_i) for x_i in x]
 
 class Params:
     def __init__(self):
@@ -68,11 +68,11 @@ class Params:
             rhos, (q_vals, q_labs), 
             self.s.get_sample_n(-1, 1, n), self.alpha.get_sample_n(0, 180, n)
         ]
-        vals = [dat[1] for dat in all_data]
-        labels = [dat[0] for dat in all_data]
+        vals = np.array([dat[1] for dat in all_data]).reshape(n, len(all_data))
+        labels = np.array([dat[0] for dat in all_data]).reshape(n, len(all_data))
         return vals, labels
     
-    def get_vals(self):
+    def get_val(self):
         rho = self.rho.get_sample(-3, -1)
         q_val = self.density.get_sample(-0.5, 0.65)[0] * rho[0]
         q_lab = self.q.get_label(q_val)
