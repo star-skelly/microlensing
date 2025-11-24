@@ -68,8 +68,8 @@ class Params:
             rhos, (q_vals, q_labs), 
             self.s.get_sample_n(-1, 1, n), self.alpha.get_sample_n(0, 180, n)
         ]
-        vals = np.array([dat[1] for dat in all_data]).reshape(n, len(all_data))
-        labels = np.array([dat[0] for dat in all_data]).reshape(n, len(all_data))
+        vals = np.array([dat[0] for dat in all_data]).reshape(n, len(all_data))
+        labels = np.array([dat[1] for dat in all_data]).reshape(n, len(all_data))
         return vals, labels
     
     def get_val(self):
