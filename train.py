@@ -3,24 +3,14 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
-import MulensModel as mm
+
+### NOTE: THIS WAS WRITTEN WITH THE HELP OF GENERATIVE AI ###
 
 dl = get_dataloader(
     xy_dir="data/generated_lightcurves/xy",
     param_file="data/generated_lightcurves/params.csv",
     batch_size=32
 )
-
-def get_curve(args):
-    my_1S2L_model = mm.Model({'t_0': 0, 'u_0': args[0],
-                            't_E': args[1], 'rho': args[2], 'q': args[3], 's': args[4],
-                            'alpha': args[5]})
-    times = my_1S2L_model.set_times()
-    lc = my_1S2L_model.get_lc(source_flux=1)
-    return np.array(lc)
-
-def get_curves(args):
-    return np.array([get_curve(arg) for arg in args])
 
 model = CurveTransformer().cuda()
 opt = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -37,10 +27,7 @@ for epoch in range(num_epochs):
 
         pred = model(seqs, mask)
 
-        y_pred = get_curves(pred.tolist())
-
-        y_observed = seqs[:,1]
-        loss = nn.SmoothL1Loss()(y_pred, y_observed)
+        loss = nn.SmoothL1Loss()(pred, params)
 
         loss.backward()
         opt.step()

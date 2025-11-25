@@ -17,7 +17,7 @@ class LightcurveDataset(Dataset):
       - data/generated_lightcurves/xy/xy_{i}.npy  (N_i, 2)
       - data/generated_lightcurves/params.csv      (2000 x 6)
     """
-    def __init__(self, xy_dir, param_file, log_params=False):
+    def __init__(self, xy_dir, param_file, log_params=True):
         self.xy_dir = xy_dir
         self.log_params = log_params
 
