@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
-from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 import os
 
-### NOTE: THIS IS CHAT-GPT GENERATED ORIGINALLY ###
+### NOTE: THIS IS DERIVED FROM A SCRIPT FROM GENERATIVE AI ###
 
 # ============================================================
 #  Dataset
@@ -15,7 +14,7 @@ class LightcurveDataset(Dataset):
     """
     Loads:
       - data/generated_lightcurves/xy/xy_{i}.npy  (N_i, 2)
-      - data/generated_lightcurves/params.csv      (1000 x 6)
+      - data/generated_lightcurves/params.csv      (2000 x 6)
     """
     def __init__(self, xy_dir, param_file, log_params=True):
         self.xy_dir = xy_dir
@@ -32,20 +31,6 @@ class LightcurveDataset(Dataset):
         # Load curve
         xy = np.load(os.path.join(self.xy_dir, f"xy_{idx}.npy"))  # shape (N, 2)
 
-        # Normalize x and y for stability
-        x = xy[:, 0]
-        y = xy[:, 1]
-
-        # Normalize x to [0,1]
-        x = (x - x.min()) / (x.max() - x.min() + 1e-9)
-
-        # Standardize y
-        y_mean = y.mean()
-        y_std = y.std() + 1e-9
-        y = (y - y_mean) / y_std
-
-        xy_norm = np.stack([x, y], axis=-1).astype(np.float32)
-
         # Load parameters
         params = self.params[idx].astype(np.float32)
 
@@ -61,38 +46,7 @@ class LightcurveDataset(Dataset):
             # alpha is angle, do NOT log
             params = params_log
 
-        return torch.tensor(xy_norm), torch.tensor(params)
-
-
-# ============================================================
-#  Collate function for variable-length curves
-# ============================================================
-
-def collate_fn(batch):
-    """
-    batch: list of (seq, params)
-       seq: (N_i, 2)
-       params: (6,)
-    Returns:
-       padded: (B, Nmax, 2)
-       mask:   (B, Nmax) with 0 for padded positions
-       params: (B, 6)
-    """
-    seqs, params = zip(*batch)
-
-    lengths = [s.shape[0] for s in seqs]
-
-    # pad to (B, Nmax, 2)
-    padded = pad_sequence(seqs, batch_first=True)  # (B, Nmax, 2)
-
-    # attention mask: True = keep, False = ignore
-    mask = torch.zeros(padded.shape[0], padded.shape[1], dtype=torch.bool)
-    for i, L in enumerate(lengths):
-        mask[i, :L] = True
-
-    params = torch.stack(params)
-
-    return padded, mask, params
+        return torch.tensor(xy.astype(np.float32)), torch.tensor(params)
 
 
 # ============================================================
@@ -169,8 +123,7 @@ def get_dataloader(xy_dir, param_file, batch_size=16, shuffle=True):
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
-        collate_fn=collate_fn
+        shuffle=shuffle
     )
 
 
