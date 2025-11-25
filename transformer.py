@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 import os
 
-### NOTE: THIS IS DERIVED FROM A SCRIPT FROM GENERATIVE AI ###
+### NOTE: THIS IS CHAT-GPT GENERATED ORIGINALLY ###
 
 # ============================================================
 #  Dataset
@@ -16,7 +17,7 @@ class LightcurveDataset(Dataset):
       - data/generated_lightcurves/xy/xy_{i}.npy  (N_i, 2)
       - data/generated_lightcurves/params.csv      (2000 x 6)
     """
-    def __init__(self, xy_dir, param_file, log_params=True):
+    def __init__(self, xy_dir, param_file, log_params=False):
         self.xy_dir = xy_dir
         self.log_params = log_params
 
@@ -47,6 +48,37 @@ class LightcurveDataset(Dataset):
             params = params_log
 
         return torch.tensor(xy.astype(np.float32)), torch.tensor(params)
+
+
+# ============================================================
+#  Collate function for variable-length curves
+# ============================================================
+
+def collate_fn(batch):
+    """
+    batch: list of (seq, params)
+       seq: (N_i, 2)
+       params: (6,)
+    Returns:
+       padded: (B, Nmax, 2)
+       mask:   (B, Nmax) with 0 for padded positions
+       params: (B, 6)
+    """
+    seqs, params = zip(*batch)
+
+    lengths = [s.shape[0] for s in seqs]
+
+    # pad to (B, Nmax, 2)
+    padded = pad_sequence(seqs, batch_first=True)  # (B, Nmax, 2)
+
+    # attention mask: True = keep, False = ignore
+    mask = torch.zeros(padded.shape[0], padded.shape[1], dtype=torch.bool)
+    for i, L in enumerate(lengths):
+        mask[i, :L] = True
+
+    params = torch.stack(params)
+
+    return padded, mask, params
 
 
 # ============================================================
@@ -88,6 +120,7 @@ class CurveTransformer(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 6)
         )
+        self.softplus = nn.Softplus()
 
     def forward(self, x, mask):
         """
@@ -110,8 +143,9 @@ class CurveTransformer(nn.Module):
         h_sum = (h * mask_float).sum(dim=1)
         lengths = mask_float.sum(dim=1)
         h_pooled = h_sum / (lengths + 1e-9)
-
-        return self.mlp(h_pooled)
+        raw_out = self.mlp(h_pooled)
+        positive_out = self.softplus(raw_out)
+        return positive_out
 
 
 # ============================================================
@@ -123,7 +157,8 @@ def get_dataloader(xy_dir, param_file, batch_size=16, shuffle=True):
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle
+        shuffle=shuffle,
+        collate_fn=collate_fn
     )
 
 
