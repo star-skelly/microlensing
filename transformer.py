@@ -80,6 +80,38 @@ def collate_fn(batch):
 
     return padded, mask, params
 
+# ============================================================
+#  Simpler MLP Model
+# ============================================================
+
+import torch.nn as nn
+
+class MLP_class(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.mlp_layers = nn.Sequential(
+            nn.Linear(2000, 1024),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+        )
+        self.target_size = 6
+
+        self.fc = nn.Sequential(
+            nn.Linear(512, 2048),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(2048, self.target_size),
+        )
+
+    def forward(self, x):
+        a, b, c = x.shape
+        out = x.squeeze(1).reshape((a, b * c))
+        out = self.mlp_layers(out)
+        return self.fc(out)
+
 
 # ============================================================
 #  Transformer Model
