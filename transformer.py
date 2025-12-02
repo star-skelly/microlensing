@@ -17,10 +17,13 @@ class LightcurveDataset(Dataset):
       - data/generated_lightcurves/xy/xy_{i}.npy  (N_i, 2)
       - data/generated_lightcurves/params.csv      (2000 x 6)
     """
-    def __init__(self, xy_dir, param_file, log_params=True):
+    def __init__(self, xy_dir, param_file, log_params=False, xy_mu=10.535774064510688, xy_sigma=10.542924743377538):
         self.xy_dir = xy_dir
         self.log_params = log_params
-
+        
+        self.xy_mu = np.array([30.26326826166035, 21.617800286628096], dtype=np.float32)
+        self.xy_sigma = np.array([73.05752743732106, 0.6507757675785745], dtype=np.float32)
+        
         # load all parameter rows
         self.params = np.loadtxt(param_file, delimiter=',')
         self.num_samples = len(self.params)
@@ -31,6 +34,7 @@ class LightcurveDataset(Dataset):
     def __getitem__(self, idx):
         # Load curve
         xy = np.load(os.path.join(self.xy_dir, f"xy_{idx}.npy"))  # shape (N, 2)
+        xy = (xy - self.xy_mu) / self.xy_sigma
 
         # Load parameters
         params = self.params[idx].astype(np.float32)
@@ -81,37 +85,53 @@ def collate_fn(batch):
     return padded, mask, params
 
 # ============================================================
-#  Simpler MLP Model
+#  CNN + MLP
 # ============================================================
-
 import torch.nn as nn
+import torch
 
 class MLP_class(nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_mlp_dim=128, num_filters=64, kernel_size=3):
         super().__init__()
-
-        self.mlp_layers = nn.Sequential(
-            nn.Linear(2000, 1024),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-        )
+        point_features = 2
+        sequence_length = 1000
         self.target_size = 6
-
-        self.fc = nn.Sequential(
-            nn.Linear(512, 2048),
+        self.cnn_feature_extractor = nn.Sequential(
+            nn.Conv1d(in_channels=point_features, out_channels=num_filters, kernel_size=kernel_size, padding='same'),
             nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(2048, self.target_size),
+            nn.MaxPool1d(kernel_size=2),
+    
+            nn.Conv1d(in_channels=num_filters, out_channels=num_filters * 2, kernel_size=kernel_size, padding='same'),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2), 
+
+            nn.Conv1d(in_channels=num_filters * 2, out_channels=num_filters * 4, kernel_size=kernel_size, padding='same'),
+            nn.ReLU(),
+            # No MaxPool here, or use AdaptiveAvgPool1d later
+        )
+
+        with torch.no_grad():
+            dummy_input = torch.randn(1, point_features, sequence_length)
+            cnn_output_shape = self.cnn_feature_extractor(dummy_input).shape
+            self.flattened_cnn_features = cnn_output_shape[1] * cnn_output_shape[2]
+        
+        self.mlp_head = nn.Sequential(
+            nn.Linear(self.flattened_cnn_features, hidden_mlp_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2), # Regularization
+            nn.Linear(hidden_mlp_dim, hidden_mlp_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_mlp_dim // 2, self.target_size),
+            nn.Softplus()
         )
 
     def forward(self, x):
-        a, b, c = x.shape
-        out = x.squeeze(1).reshape((a, b * c))
-        out = self.mlp_layers(out)
-        return self.fc(out)
-
+        x_permuted = x.permute(0, 2, 1)
+        cnn_features = self.cnn_feature_extractor(x_permuted)
+        flattened_features = cnn_features.view(cnn_features.size(0), -1)
+        predictions = self.mlp_head(flattened_features)
+        
+        return predictions
 
 # ============================================================
 #  Transformer Model
@@ -185,7 +205,7 @@ class CurveTransformer(nn.Module):
 # ============================================================
 
 def get_dataloader(xy_dir, param_file, batch_size=16, shuffle=True):
-    dataset = LightcurveDataset(xy_dir, param_file, log_params=True)
+    dataset = LightcurveDataset(xy_dir, param_file, log_params=False)
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,

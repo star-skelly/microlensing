@@ -2,7 +2,6 @@ from transformer import MLP_class, get_dataloader
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
-import numpy as np
 
 dl = get_dataloader(
     xy_dir="data/generated_lightcurves/xy",
@@ -13,7 +12,7 @@ dl = get_dataloader(
 model = MLP_class().cuda()
 opt = torch.optim.Adam(model.parameters(), lr=1e-4)
 
-num_epochs = 20
+num_epochs = 100
 loss_hist = []
 for epoch in range(num_epochs):
     opt.zero_grad()
@@ -29,7 +28,7 @@ for epoch in range(num_epochs):
         loss.backward()
         opt.step()
 
-        if step % 10 == 0:
+        if step % 50 == 0:
             print(f"step {step} loss {loss.item():.5f}")
     loss_hist.append(loss.item())
 
