@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from transformer import MLP_class, get_dataloader
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import os
+import MulensModel as mm
 
 # --- Configuration ---
 MODEL_PATH = "chkpt.pth"
@@ -21,6 +22,16 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 def calculate_rmse(y_true, y_pred):
     """Calculates Root Mean Squared Error (RMSE)."""
     return np.sqrt(mean_squared_error(y_true, y_pred))
+
+# function to get smooth curve
+def get_curve(args):
+    my_1S2L_model = mm.Model({'t_0': 0, 'u_0': args[0],
+                              't_E': args[1], 'rho': args[2], 'q': args[3], 's': args[4],
+                              'alpha': args[5]})
+    times = my_1S2L_model.set_times()
+    times -= min(times)
+    lc = my_1S2L_model.get_lc(source_flux=1)
+    return times, lc
 
 # Function to run the evaluation
 def run_evaluation():
@@ -73,8 +84,9 @@ def run_evaluation():
             
             # Save the first batch for example visualization
             if example_batch is None:
-                example_batch = (predictions_np, params_np)
-                print(f"Example prediction generated (Batch 0). True shape: {params_np.shape}, Pred shape: {predictions_np.shape}")
+                seqs_np = seqs.cpu().numpy()
+                example_batch = (predictions_np, params_np, seqs_np)
+                print(f"Example prediction generated (Batch 0). True shape: {params_np.shape}, Pred shape: {predictions_np.shape}, Seqs shape: {seqs_np.shape}")
 
 
     # Combine all results
@@ -93,42 +105,29 @@ def run_evaluation():
     rmse = calculate_rmse(all_true_params, all_predictions)
     print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
     
-    # --- Example Visualization (Predicted vs. True) ---
-
     if example_batch is not None:
-        pred_ex, true_ex = example_batch
+        pred_ex, true_ex, seqs = example_batch
         
-        # Determine the number of predicted parameters (dimensionality of the output)
-        num_params = pred_ex.shape[1] 
-        
-        # Create a subplot for each parameter
-        fig, axes = plt.subplots(1, num_params, figsize=(5 * num_params, 5))
-        
-        # Handle case where there is only 1 parameter (axes is not an array)
-        if num_params == 1:
-            axes = [axes]
-        
-        print(f"\nVisualizing example predictions for {num_params} parameters...")
+        pred_args = pred_ex[0]
+        true_args = true_ex[0]
+        arg_names = ['u_0', 't_E', 'rho', 'q', 's', 'alpha']
+        fig, (ax1, ax2) = plt.subplots(2)
+        ax1.plot(np.arange(6), true_args, 'o-', label='True Parameter', alpha=0.7)
+        ax1.plot(np.arange(6), pred_args, 'x--', label='Predicted Parameter', alpha=0.7)
+        ax1.set_xticks(np.arange(6))
+        ax1.set_xticklabels(arg_names)
+        ax1.set_ylabel("Value")
+        ax1.legend()
 
-        for i in range(num_params):
-            ax = axes[i]
-            # Plot the predictions and true values for this specific parameter across the batch
-            # We use indices (0 to BATCH_SIZE-1) on the x-axis to represent different samples in the batch
-            sample_indices = np.arange(len(pred_ex))
-            
-            ax.plot(sample_indices, true_ex[:, i], 'o-', label='True Parameter', alpha=0.7)
-            ax.plot(sample_indices, pred_ex[:, i], 'x--', label='Predicted Parameter', alpha=0.7)
-            
-            # Calculate the individual parameter's MAE and RMSE for the overall test set
-            param_mae = mean_absolute_error(all_true_params[:, i], all_predictions[:, i])
-            param_rmse = calculate_rmse(all_true_params[:, i], all_predictions[:, i])
-
-            ax.set_title(f'Parameter {i+1} Prediction Example\nMAE: {param_mae:.3f}, RMSE: {param_rmse:.3f}')
-            ax.set_xlabel('Sample Index in Batch')
-            ax.set_ylabel(f'Parameter Value')
-            ax.legend()
-            ax.grid(True, linestyle='--', alpha=0.6)
-
+        x = seqs[0,:,0]
+        y = seqs[0,:,1]
+        ax2.plot(x, y, label="Noisy Data")
+        x_fit, y_fit = get_curve(pred_args.tolist())
+        y_fit = np.interp(x, x_fit, y_fit)
+        ax2.plot(x, y_fit, label="Fitted Curve")
+        ax2.legend()
+        ax2.set_ylabel("Magnification Factor")
+        ax2.set_xlabel("Time")
         plt.tight_layout()
         plot_filename = os.path.join(OUTPUT_DIR, 'example_predictions.png')
         plt.savefig(plot_filename)
