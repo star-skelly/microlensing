@@ -21,8 +21,8 @@ class LightcurveDataset(Dataset):
         self.xy_dir = xy_dir
         self.log_params = log_params
         
-        self.xy_mu = np.array([30.26326826166035, 21.617800286628096], dtype=np.float32)
-        self.xy_sigma = np.array([73.05752743732106, 0.6507757675785745], dtype=np.float32)
+        self.x_mu = 30.26326826166035
+        self.x_sigma = 73.05752743732106
         
         # load all parameter rows
         self.params = np.loadtxt(param_file, delimiter=',')
@@ -34,7 +34,9 @@ class LightcurveDataset(Dataset):
     def __getitem__(self, idx):
         # Load curve
         xy = np.load(os.path.join(self.xy_dir, f"xy_{idx}.npy"))  # shape (N, 2)
-        xy = xy[:,0] * xy[:,1] # shape (N)
+        x = (xy[:,0] - self.x_mu) / self.x_sigma
+        y = xy[:,1] 
+        xy = x * y # shape (N)
         #xy = (xy - self.xy_mu) / self.xy_sigma
 
         # Load parameters
@@ -94,30 +96,12 @@ import torch
 class MLP_class(nn.Module):
     def __init__(self, hidden_mlp_dim=128, num_filters=64, kernel_size=3):
         super().__init__()
-        point_features = 1
+        point_features = 32
         sequence_length = 1000
         self.target_size = 6
-        self.cnn_feature_extractor = nn.Sequential(
-            nn.Conv1d(in_channels=point_features, out_channels=num_filters, kernel_size=kernel_size, padding='same'),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2),
-    
-            nn.Conv1d(in_channels=num_filters, out_channels=num_filters * 2, kernel_size=kernel_size, padding='same'),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2), 
 
-            nn.Conv1d(in_channels=num_filters * 2, out_channels=num_filters * 4, kernel_size=kernel_size, padding='same'),
-            nn.ReLU(),
-            # No MaxPool here, or use AdaptiveAvgPool1d later
-        )
-
-        with torch.no_grad():
-            dummy_input = torch.randn(1, point_features, sequence_length)
-            cnn_output_shape = self.cnn_feature_extractor(dummy_input).shape
-            self.flattened_cnn_features = cnn_output_shape[1] * cnn_output_shape[2]
-        
         self.mlp_head = nn.Sequential(
-            nn.Linear(self.flattened_cnn_features, hidden_mlp_dim),
+            nn.Linear(sequence_length, hidden_mlp_dim),
             nn.ReLU(),
             nn.Dropout(0.2), # Regularization
             nn.Linear(hidden_mlp_dim, hidden_mlp_dim // 2),
@@ -127,10 +111,7 @@ class MLP_class(nn.Module):
         )
 
     def forward(self, x):
-        x_permuted = x.permute(0, 2, 1)
-        cnn_features = self.cnn_feature_extractor(x_permuted)
-        flattened_features = cnn_features.view(cnn_features.size(0), -1)
-        predictions = self.mlp_head(flattened_features)
+        predictions = self.mlp_head(x)
         
         return predictions
 
