@@ -1,4 +1,4 @@
-from transformer import CurveTransformer, get_dataloader
+from models import CurveTransformer, get_dataloader
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt

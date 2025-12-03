@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from transformer import MLP_class, get_dataloader
+from models import MLP_class, get_dataloader
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import os
 import MulensModel as mm

@@ -34,7 +34,8 @@ class LightcurveDataset(Dataset):
     def __getitem__(self, idx):
         # Load curve
         xy = np.load(os.path.join(self.xy_dir, f"xy_{idx}.npy"))  # shape (N, 2)
-        xy = (xy - self.xy_mu) / self.xy_sigma
+        xy = xy[:,0] * xy[:,1] # shape (N)
+        #xy = (xy - self.xy_mu) / self.xy_sigma
 
         # Load parameters
         params = self.params[idx].astype(np.float32)
@@ -93,7 +94,7 @@ import torch
 class MLP_class(nn.Module):
     def __init__(self, hidden_mlp_dim=128, num_filters=64, kernel_size=3):
         super().__init__()
-        point_features = 2
+        point_features = 1
         sequence_length = 1000
         self.target_size = 6
         self.cnn_feature_extractor = nn.Sequential(
@@ -122,7 +123,7 @@ class MLP_class(nn.Module):
             nn.Linear(hidden_mlp_dim, hidden_mlp_dim // 2),
             nn.ReLU(),
             nn.Linear(hidden_mlp_dim // 2, self.target_size),
-            nn.Softplus()
+            nn.ReLU()
         )
 
     def forward(self, x):
