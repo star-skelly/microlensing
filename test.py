@@ -28,8 +28,10 @@ def get_curve(args):
     my_1S2L_model = mm.Model({'t_0': 0, 'u_0': args[0],
                               't_E': args[1], 'rho': args[2], 'q': args[3], 's': args[4],
                               'alpha': args[5]})
-    times = my_1S2L_model.set_times()
+    times = my_1S2L_model.set_times(n_epochs=1001, dt=None)
     times -= min(times)
+    if len(times) > 1000:
+        times = times[:-1]
     lc = my_1S2L_model.get_lc(source_flux=1)
     return times, lc
 

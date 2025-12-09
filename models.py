@@ -107,7 +107,7 @@ class MLP_class(nn.Module):
             nn.Linear(hidden_mlp_dim, hidden_mlp_dim // 2),
             nn.ReLU(),
             nn.Linear(hidden_mlp_dim // 2, self.target_size),
-            nn.ReLU()
+            nn.Softmax()
         )
 
     def forward(self, x):
